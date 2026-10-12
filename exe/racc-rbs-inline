@@ -1,0 +1,6 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "racc_rbs_inline/cli"
+
+exit RaccRbsInline::CLI.run(ARGV)

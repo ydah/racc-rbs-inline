@@ -1,0 +1,16 @@
+# Generated from lib/racc_rbs_inline/rake_task.rb with RBS::Inline
+
+module RaccRbsInline
+  class RakeTask
+    include Rake::DSL
+
+    attr_accessor grammar: String?
+
+    attr_accessor output: String?
+
+    attr_accessor options: Array[String]
+
+    # : (?Symbol | String name) ?{ (RakeTask) -> void } -> void
+    def initialize: (?Symbol | String name) ?{ (RakeTask) -> void } -> void
+  end
+end

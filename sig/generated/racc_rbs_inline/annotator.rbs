@@ -1,0 +1,51 @@
+# Generated from lib/racc_rbs_inline/annotator.rb with RBS::Inline
+
+module RaccRbsInline
+  class Annotator
+    MAGIC: String
+
+    INTEGER_TABLE: Regexp
+
+    REDUCTION: Regexp
+
+    CONSTANT_TYPES: Hash[Symbol, String]
+
+    # : (String source) -> String
+    def annotate: (String source) -> String
+
+    # : (String source) -> bool
+    def annotated?: (String source) -> bool
+
+    private
+
+    # : (String source) -> String
+    def unwrap: (String source) -> String
+
+    # : (String source) -> String
+    def add_annotations: (String source) -> String
+
+    # : (Prism::LocalVariableWriteNode node) -> String?
+    def table_type: (Prism::LocalVariableWriteNode node) -> String?
+
+    # : (Prism::Node node, String type) -> [Integer, Integer, String]
+    def trailing: (Prism::Node node, String type) -> [ Integer, Integer, String ]
+
+    # : (String source) -> String
+    def add_magic_comment: (String source) -> String
+
+    # : (String source) -> String
+    def newline: (String source) -> String
+
+    # : (String source) -> Prism::ProgramNode
+    def parse!: (String source) -> Prism::ProgramNode
+
+    # : (Prism::ProgramNode program) -> Array[Prism::StatementsNode]
+    def parser_bodies: (Prism::ProgramNode program) -> Array[Prism::StatementsNode]
+
+    # : (String binary, Integer offset) -> Integer
+    def line_start: (String binary, Integer offset) -> Integer
+
+    # : (String source, Array[[Integer, Integer, String]] edits) -> String
+    def apply: (String source, Array[[ Integer, Integer, String ]] edits) -> String
+  end
+end

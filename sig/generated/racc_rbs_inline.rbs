@@ -1,0 +1,12 @@
+# Generated from lib/racc_rbs_inline.rb with RBS::Inline
+
+module RaccRbsInline
+  class Error < StandardError
+  end
+
+  # : (String source) -> String
+  def self.annotate: (String source) -> String
+
+  # : (String source) -> bool
+  def self.annotated?: (String source) -> bool
+end

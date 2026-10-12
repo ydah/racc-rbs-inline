@@ -1,0 +1,37 @@
+# Generated from lib/racc_rbs_inline/cli.rb with RBS::Inline
+
+module RaccRbsInline
+  class CLI
+    HELP: ::String
+
+    @out: untyped
+
+    @err: untyped
+
+    # : (Array[String] argv, ?out: untyped, ?err: untyped) -> Integer
+    def self.run: (Array[String] argv, ?out: untyped, ?err: untyped) -> Integer
+
+    # : (out: untyped, err: untyped) -> void
+    def initialize: (out: untyped, err: untyped) -> void
+
+    # : (Array[String] argv) -> Integer
+    def run: (Array[String] argv) -> Integer
+
+    private
+
+    # : (Array[String] args) -> Integer
+    def annotate: (Array[String] args) -> Integer
+
+    # : (Array[String] args) -> Integer
+    def generate: (Array[String] args) -> Integer
+
+    # : () -> Array[String]
+    def racc_command: () -> Array[String]
+
+    # : (Array[String] args) -> Integer
+    def sig: (Array[String] args) -> Integer
+
+    # : (String path, String source, Integer mode) -> void
+    def replace: (String path, String source, Integer mode) -> void
+  end
+end
