@@ -14,7 +14,7 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = ">= 3.2.0"
   spec.metadata["allowed_push_host"] = "https://rubygems.org"
   spec.metadata["source_code_uri"] = spec.homepage
-  spec.files = Dir["lib/**/*.rb", "exe/*", "data/**/*.rbs", "sig/**/*.rbs", "README.md", "LICENSE.txt"]
+  spec.files = Dir["lib/**/*.rb", "exe/*", "data/**/*.rbs", "sig/**/*.rbs", "sig/manifest.yaml", "README.md", "LICENSE.txt"]
   spec.bindir = "exe"
   spec.executables = ["racc-rbs-inline"]
   spec.require_paths = ["lib"]

@@ -29,4 +29,16 @@ class RuntimeSignatureTest < Minitest::Test
     end
     assert_equal ["prism"], spec.runtime_dependencies.map(&:name)
   end
+
+  def test_gem_signatures_load_their_optional_rake_dependency
+    loader = RBS::EnvironmentLoader.new
+    loader.repository.add(Pathname(File.expand_path("../.gem_rbs_collection", __dir__)))
+    loader.add(library: "racc-rbs-inline")
+    environment = RBS::Environment.from_loader(loader).resolve_type_names
+    name = RBS::TypeName.new(name: :RakeTask, namespace: RBS::Namespace.parse("::RaccRbsInline::"))
+    definition = RBS::DefinitionBuilder.new(env: environment).build_instance(name)
+    assert definition.methods.key?(:initialize)
+    spec = Gem::Specification.load(File.expand_path("../racc-rbs-inline.gemspec", __dir__))
+    assert_includes spec.files, "sig/manifest.yaml"
+  end
 end
