@@ -1,0 +1,106 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler"
+require "fileutils"
+require "json"
+require "open3"
+require "tmpdir"
+require "racc"
+
+ROOT = File.expand_path("..", __dir__)
+LRAMA_REVISION = "aca15d321e77c0922271c6f8b5116ce46272f2fc"
+LRAMA = File.join(ROOT, "tmp/lrama")
+RESULTS = File.join(ROOT, "tmp/lrama-acceptance")
+RUBY = RbConfig.ruby
+BUNDLE = Gem.bin_path("bundler", "bundle")
+
+def run!(*command, **options)
+  abort "Command failed: #{command.join(' ')}" unless system(*command, **options)
+end
+
+def parser_specs(label)
+  report = File.join(RESULTS, "#{label}.json")
+  Bundler.with_unbundled_env do
+    run!({ "BUNDLE_GEMFILE" => File.join(RESULTS, "Gemfile") }, RUBY, BUNDLE,
+      "exec", "rspec", "-Ilib", "-Ispec", "spec/lrama/parser_spec.rb",
+      "--format", "progress", "--format", "json", "--out", report, chdir: LRAMA)
+  end
+  result = JSON.parse(File.read(report))
+  summary = result.fetch("summary")
+  abort "No parser examples ran" unless summary.fetch("example_count").positive?
+  abort "Parser examples failed or were pending" unless summary.fetch("failure_count").zero? && summary.fetch("pending_count").zero?
+  result.fetch("examples").map { |example| [example.fetch("full_description"), example.fetch("status")] }.sort
+end
+
+abort "The acceptance test requires Racc 1.8.1" unless Racc::VERSION == "1.8.1"
+FileUtils.mkdir_p(RESULTS)
+unless File.directory?(LRAMA)
+  run!("git", "init", LRAMA)
+  run!("git", "-C", LRAMA, "fetch", "--depth=1", "https://github.com/ruby/lrama.git", LRAMA_REVISION)
+  run!("git", "-C", LRAMA, "checkout", "--detach", "FETCH_HEAD")
+end
+revision, status = Open3.capture2("git", "-C", LRAMA, "rev-parse", "HEAD")
+abort "tmp/lrama must be at #{LRAMA_REVISION}" unless status.success? && revision.strip == LRAMA_REVISION
+dirty, status = Open3.capture2("git", "-C", LRAMA, "status", "--porcelain", "--untracked-files=no")
+abort "tmp/lrama has tracked changes; use a clean checkout" unless status.success? && dirty.empty?
+
+File.write(File.join(RESULTS, "Gemfile"), <<~GEMFILE)
+  source "https://rubygems.org"
+  gem "racc", "1.8.1"
+  gem "rspec", "3.13.2"
+  gem "simplecov", "0.22.0"
+GEMFILE
+Bundler.with_unbundled_env do
+  environment = { "BUNDLE_GEMFILE" => File.join(RESULTS, "Gemfile") }
+  run!(environment, RUBY, BUNDLE, "install") unless system(environment, RUBY, BUNDLE, "check")
+end
+
+parser = File.join(LRAMA, "lib/lrama/parser.rb")
+original = File.binread(parser)
+begin
+  run!(RUBY, Gem.bin_path("racc", "racc"), "parser.y", "--embedded", "--frozen", "-o", parser, chdir: LRAMA)
+  baseline = parser_specs("baseline")
+  run!(RUBY, "-I#{File.join(ROOT, 'lib')}", File.join(ROOT, "exe/racc-rbs-inline"),
+    "generate", "parser.y", "-o", parser, "--", "--embedded", "--frozen", chdir: LRAMA)
+  annotated = File.read(parser)
+  abort "Parser was not annotated" unless annotated.include?("# rbs_inline: enabled")
+  abort "Parser examples changed after annotation" unless baseline == parser_specs("annotated")
+
+  Dir.mktmpdir("lrama-types") do |dir|
+    FileUtils.mkdir_p(File.join(dir, "sig"))
+    FileUtils.cp(File.join(ROOT, "data/racc/parser.rbs"), File.join(dir, "sig/racc.rbs"))
+    FileUtils.cp_r(File.join(LRAMA, "sig"), File.join(dir, "lrama-sig"))
+    # Unrelated profiler signatures use `void` in unions, which RBS 4.1 rejects.
+    %w[call_stack memory].each do |name|
+      FileUtils.rm(File.join(dir, "lrama-sig/generated/lrama/reporter/profile/#{name}.rbs"))
+    end
+    File.write(File.join(dir, "parser.rb"), annotated)
+    File.write(File.join(dir, "Steepfile"), <<~STEEP)
+      target :parser do
+        check "parser.rb", inline: true
+        signature "sig"
+        signature "lrama-sig"
+        library "erb", "strscan", "timeout", "forwardable", "optparse"
+        configure_code_diagnostics(Steep::Diagnostic::Ruby.strict)
+      end
+    STEEP
+    out, err, status = Open3.capture3(RUBY, Gem.bin_path("steep", "steep"), "check", "--jobs=1", "--format=github", chdir: dir)
+    File.write(File.join(RESULTS, "steep.log"), out + err)
+    diagnostics = out.lines.grep(/^::(?:error|warning|notice) /)
+    abort "Steep failed: #{out}#{err}" unless status.success? || (status.exitstatus == 1 && !diagnostics.empty?)
+    first = annotated.lines.index { |line| line.include?("State transition tables begin") } or abort "Missing tables"
+    last = annotated.lines.index { |line| line.include?("State transition tables end") } or abort "Missing tables"
+    generated = diagnostics.select do |diagnostic|
+      line = diagnostic[/,line=(\d+),/, 1].to_i
+      code = diagnostic[/::\[([^\]]+)\]/, 1]
+      (first + 1..last + 1).cover?(line) || code&.start_with?("RBS::") ||
+        %w[Ruby::FalseAssertion Ruby::MethodParameterMismatch].include?(code) ||
+        code&.match?(/Unused.*Annotation|Annotation.*Unused/)
+    end
+    abort "Generated type errors:\n#{generated.join}" unless generated.empty?
+  end
+  puts "Lrama #{LRAMA_REVISION}: #{baseline.length} parser examples passed before and after annotation; generated type diagnostics: 0"
+ensure
+  File.binwrite(parser, original)
+end

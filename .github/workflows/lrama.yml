@@ -1,0 +1,32 @@
+name: Lrama acceptance
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  parser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+      - name: Check pinned Lrama parser behavior and types
+        run: bundle exec ruby script/test-lrama
+      - name: Upload acceptance reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lrama-acceptance
+          path: |
+            tmp/lrama-acceptance/*.json
+            tmp/lrama-acceptance/steep.log

@@ -255,6 +255,15 @@ Racc 1.6.2 does not support `--frozen`; that variant is skipped there.
 Racc 1.6.2 and 1.7.3 cannot generate the four upstream grammars using Racc 1.8's
 group/optional/repetition syntax, so their corpus checks cover the remaining 49.
 
+The separate Lrama acceptance job checks the pinned upstream parser before and
+after generation with `--embedded --frozen` (79 examples each), then checks
+generated annotations with strict Steep diagnostics. Run it locally with
+`bundle exec ruby script/test-lrama`; it fetches Lrama into ignored `tmp/lrama`
+and writes reports to `tmp/lrama-acceptance`. It restores the original parser
+after the check and requires a clean checkout at the pinned revision.
+Application type errors remain in the report; two unrelated profiler signatures
+using unsupported `void` unions are excluded from the temporary checking project.
+
 ## License
 
 [MIT](LICENSE.txt).
