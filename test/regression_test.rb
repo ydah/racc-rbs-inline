@@ -63,7 +63,9 @@ class RegressionTest < Minitest::Test
         FileUtils.mkdir_p(project)
         out, err, status = gem_command("racc", "racc", "-o", File.join(project, "parser.rb"), grammar)
         assert status.success?, "#{name}: #{out}#{err}"
-        source = RaccRbsInline.annotate(File.read(File.join(project, "parser.rb")))
+        generated = File.read(File.join(project, "parser.rb"))
+        source = RaccRbsInline.annotate(generated)
+        assert_equal source, RaccRbsInline.annotate(generated, grammar: File.read(grammar), grammar_filename: grammar), name
         write_type_project(project, source)
         sources["#{id}/parser.rb"] = source
         out, err, status = command(RbConfig.ruby, "-c", "parser.rb", chdir: project)

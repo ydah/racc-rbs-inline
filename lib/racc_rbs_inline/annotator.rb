@@ -14,13 +14,20 @@ module RaccRbsInline
       Racc_debug_parser: "bool"
     }.freeze #: Hash[Symbol, String]
 
-    #: (String source) -> String
-    def annotate(source)
-      return source if annotated?(source)
+    #: (String source, ?grammar: String?, ?grammar_filename: String) -> String
+    def annotate(source, grammar: nil, grammar_filename: "grammar.y")
+      existing = annotated?(source)
+      return source if existing && !grammar
+
+      types = nil #: GrammarTypes?
+      if grammar
+        require_relative "grammar_types"
+        types = GrammarTypes.new(grammar, filename: grammar_filename)
+      end
 
       source = unwrap(source)
-      source = add_annotations(source)
-      add_magic_comment(source)
+      source = add_annotations(source, types: types, existing: existing)
+      existing ? source : add_magic_comment(source)
     end
 
     #: (String source) -> bool
@@ -52,19 +59,20 @@ module RaccRbsInline
       apply(source, edits)
     end
 
-    #: (String source) -> String
-    def add_annotations(source)
+    #: (String source, types: GrammarTypes?, existing: bool) -> String
+    def add_annotations(source, types:, existing:)
       edits = [] #: Array[[Integer, Integer, String]]
       binary = source.b
       parser_bodies(parse!(source)).each do |body|
+        signatures = types ? types.signatures(body: body) : {} #: Hash[Symbol, String]
         body.body.each do |statement|
           case statement
           when Prism::LocalVariableWriteNode
             type = table_type(statement)
-            edits << trailing(statement, type) if type
+            edits << trailing(statement, type) if type && !existing
           when Prism::ConstantWriteNode
             type = CONSTANT_TYPES[statement.name]
-            edits << trailing(statement, type) if type
+            edits << trailing(statement, type) if type && !existing
           when Prism::DefNode
             next unless statement.name.to_s.match?(REDUCTION)
 
@@ -76,7 +84,14 @@ module RaccRbsInline
             parameters += ", untyped result" if count == 3
             start = line_start(binary, statement.location.start_offset)
             indent = binary.byteslice(start, statement.location.start_offset - start)
-            edits << [start, start, "#{indent}#: (#{parameters}) -> untyped#{newline(source)}".b]
+            signature = signatures.fetch(statement.name, "#: (#{parameters}) -> untyped")
+            finish = start
+            if existing && start.positive?
+              previous = line_start(binary, start - 1)
+              line = binary.byteslice(previous, start - previous)
+              start = previous if line&.match?(/\A[ \t]*#:/)
+            end
+            edits << [start, finish, "#{indent}#{signature}#{newline(source)}".b]
           end
         end
       end

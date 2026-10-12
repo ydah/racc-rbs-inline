@@ -14,7 +14,7 @@ module RaccRbsInline
     HELP = <<~TEXT
       Usage: racc-rbs-inline COMMAND [OPTIONS]
 
-        annotate [--stdout | --check] FILE...
+        annotate [--stdout | --check] [--grammar GRAMMAR] FILE...
         generate GRAMMAR -o OUT [-- RACC_OPTIONS]
         sig [--output DIR]                         (default: sig/racc)
         --version
@@ -63,20 +63,24 @@ module RaccRbsInline
     def annotate(args)
       stdout = false
       check = false
+      grammar_path = nil #: String?
       parser = OptionParser.new do |options|
-        options.banner = "Usage: racc-rbs-inline annotate [--stdout | --check] FILE..."
+        options.banner = "Usage: racc-rbs-inline annotate [--stdout | --check] [--grammar GRAMMAR] FILE..."
         options.on("--stdout", "Write annotated source to standard output") { stdout = true }
         options.on("--check", "List files needing annotation without writing") { check = true }
+        options.on("--grammar FILE", "Use semantic types declared in a Racc grammar") { |path| grammar_path = path }
         options.on("-h", "--help") { @out.puts(options); return 0 }
       end
       parser.parse!(args)
       raise Error, "annotate requires at least one file" if args.empty?
       raise Error, "--stdout and --check cannot be combined" if stdout && check
+      grammar_filename = grammar_path
+      grammar = grammar_filename ? File.read(grammar_filename) : nil
 
       # Validate every input before replacing any of them.
       results = args.map do |path|
         source = File.binread(path)
-        [path, source, RaccRbsInline.annotate(source)]
+        [path, source, RaccRbsInline.annotate(source, grammar: grammar, grammar_filename: grammar_filename || "grammar.y")]
       rescue Error => error
         raise Error, "#{path}: #{error.message}"
       end #: Array[[String, String, String]]
@@ -134,7 +138,10 @@ module RaccRbsInline
         @err.write(stderr)
         return status.exitstatus || 1 unless status.success?
 
-        annotated = RaccRbsInline.annotate(File.binread(generated))
+        require_relative "grammar_types"
+        grammar_source = File.read(grammar)
+        typed_grammar = GrammarTypes.declared?(grammar_source, filename: grammar) ? grammar_source : nil
+        annotated = RaccRbsInline.annotate(File.binread(generated), grammar: typed_grammar, grammar_filename: grammar)
         # Racc's --verbose option also produces a .output file beside the parser.
         artifacts = Dir.children(directory).reject { |name| name == File.basename(generated) }
         artifacts.each do |name|

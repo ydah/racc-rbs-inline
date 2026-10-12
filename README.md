@@ -17,8 +17,8 @@ group :development do
 end
 ```
 
-Run `bundle install`. The annotator requires Ruby 3.2+ and Prism 1.0+.
-Racc is needed to generate parsers, but not to annotate an existing generated file.
+Run `bundle install`. The annotator requires Ruby 3.2+, Prism 1.0+, Racc 1.6.2+
+(below 2.0), and RBS 4.1+ (below 5.0).
 
 ## Usage
 
@@ -47,6 +47,9 @@ bundle exec racc-rbs-inline annotate lib/parser.rb lib/other_parser.rb
 # Print the transformed source, leaving files alone.
 bundle exec racc-rbs-inline annotate --stdout lib/parser.rb
 
+# Add semantic value types declared in the grammar.
+bundle exec racc-rbs-inline annotate lib/parser.rb --grammar parser.y
+
 # List files needing annotation; exit 1 if any need changes, otherwise 0.
 bundle exec racc-rbs-inline annotate --check lib/parser.rb
 
@@ -68,10 +71,52 @@ require "racc_rbs_inline"
 
 annotated_source = RaccRbsInline.annotate(source)
 RaccRbsInline.annotated?(annotated_source) # => true
+
+# Supply grammar text to add or refresh semantic value types.
+annotated_source = RaccRbsInline.annotate(source,
+  grammar: File.read("parser.y"), grammar_filename: "parser.y")
 ```
 
-`annotated?` detects the `# rbs_inline: enabled` comment. Files already carrying
-that marker are left untouched; it does not re-audit their annotations.
+`annotated?` detects the `# rbs_inline: enabled` comment. Without a grammar,
+files already carrying that marker are left untouched. Supplying a grammar
+validates the generated tables and refreshes reduction signatures, including
+files that already have generic annotations.
+
+## Semantic value types
+
+Declare terminal and nonterminal types in grammar comments:
+
+```ruby
+class TypedCalc
+  # @racc-type NUMBER exp target : Integer
+  # @racc-type '+' '(' ')' : String
+rule
+  target: exp { result = val[0] }
+  exp: NUMBER { result = val[0] }
+     | exp '+' NUMBER { result = val[0] + val[2] }
+     | '(' exp ')' { result = val[1] }
+end
+```
+
+`generate` and the Rake task read these declarations automatically. For an
+existing generated parser, pass `annotate --grammar parser.y`. Use the same
+Racc version that generated the parser: mismatched rule tables are rejected
+before writing. Invalid RBS types, unknown symbols, and conflicting declarations
+are also errors. Semantic type processing requires quoted grammar symbols to
+be literal strings without Ruby interpolation.
+
+Each reduction receives a tuple of the right-hand-side types and returns the
+left-hand-side type. Undeclared symbols stay `untyped`. The initial `result`
+parameter includes both the first right-hand-side type (or `nil` for an empty
+rule) and the left-hand-side type. `no_result_var` grammars receive two
+parameters instead. Racc 1.8's `?`, `*`, and `+` symbols become optional or array
+types; groups become `Array[untyped]`. Generated helper reductions and
+`_reduce_none` retain generic signatures.
+
+With the declarations above, returning `val[0]` from the parenthesized rule is
+reported as a `String`/`Integer` mismatch by both checking workflows. A runnable
+example, including token handling, is in
+[test/fixtures/typed_calc.y](test/fixtures/typed_calc.y).
 
 ## Rake integration
 
@@ -97,9 +142,10 @@ bundle exec racc-rbs-inline sig
 ```
 
 These signatures live in `data/racc` inside the gem, so they are not automatically
-loaded with this gem's own signatures. Until Racc signatures are accepted into
-[gem_rbs_collection](https://github.com/ruby/gem_rbs_collection), use the `sig`
-command. Once collection support is available, use `rbs collection install`
+loaded with this gem's own signatures. Racc signatures have been submitted in
+[gem_rbs_collection PR #1085](https://github.com/ruby/gem_rbs_collection/pull/1085).
+Until they are accepted, use the `sig` command. Once collection support is
+available, use `rbs collection install`
 and remove your copied `sig/racc` directory to avoid duplicate declarations.
 
 ### Native inline support (Steep 2.0)
@@ -153,7 +199,7 @@ strict diagnostics. To enable strict diagnostics in your own target, add
 The annotator locates classes whose bodies assign `Racc_arg`. It unwraps their
 heredoc `module_eval` calls, then annotates ten tables, three constants, and all
 `_reduce_N` / `_reduce_none` methods. Reduction arguments and results use
-`untyped`. Semantic value declarations (`@racc-type`) are a future phase.
+`untyped` unless grammar declarations supply semantic value types.
 
 User-written actions, `header`, `inner`, and `footer` code remain your
 responsibility to type. Existing annotations in `inner` become visible after
@@ -188,7 +234,8 @@ bundle exec rake
 ```
 
 `rake test` runs unit tests, 13 golden/behavior variants, both type-checking
-workflows, a deliberately corrupt table test, and the upstream Racc corpus.
+workflows, semantic value checks, deliberately corrupt table tests, and the
+upstream Racc corpus.
 The corpus is fetched from the pinned `v1.8.1` tag into ignored `tmp/racc` and is
 not redistributed. Set `RACC_CORPUS` to use another local copy. Without the
 corpus, that regression test reports a skip; CI always fetches it.

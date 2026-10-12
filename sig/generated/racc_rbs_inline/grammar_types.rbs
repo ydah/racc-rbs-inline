@@ -1,0 +1,48 @@
+# Generated from lib/racc_rbs_inline/grammar_types.rb with RBS::Inline
+
+module RaccRbsInline
+  class GrammarTypes
+    @rules: Array[untyped]
+
+    @table: untyped
+
+    @result_var: bool
+
+    @types: Hash[Symbol | String, String]
+
+    # : (String source, ?filename: String) -> bool
+    def self.declared?: (String source, ?filename: String) -> bool
+
+    # : (String source, ?filename: String) -> void
+    def initialize: (String source, ?filename: String) -> void
+
+    # : (body: Prism::StatementsNode) -> Hash[Symbol, String]
+    def signatures: (body: Prism::StatementsNode) -> Hash[Symbol, String]
+
+    private
+
+    # : (String source, String filename) ?{ (String) -> String } -> Array[Integer]
+    def self.grammar_comment_lines: (String source, String filename) ?{ (String) -> String } -> Array[Integer]
+
+    # : (String source, Array[Integer] comment_lines) -> Hash[Symbol | String, String]
+    def declarations: (String source, Array[Integer] comment_lines) -> Hash[Symbol | String, String]
+
+    # : (String source) -> String
+    def literal_string: (String source) -> String
+
+    # : (untyped symbol) -> String
+    def type_for: (untyped symbol) -> String
+
+    # : (String first, String target) -> String
+    def union: (String first, String target) -> String
+
+    # : (String source) -> RBS::Types::t
+    def parse_type: (String source) -> RBS::Types::t
+
+    # : (Prism::StatementsNode body) -> void
+    def validate_tables: (Prism::StatementsNode body) -> void
+
+    # : (Prism::Node node) -> untyped
+    def literal: (Prism::Node node) -> untyped
+  end
+end

@@ -1,0 +1,24 @@
+module Racc
+  class Error < StandardError
+  end
+
+  class CompileError < Error
+  end
+
+  class GrammarFileScanner
+    def initialize: (String source, String filename) -> void
+    def lineno: () -> Integer
+    def yylex: () { (untyped) -> void } -> void
+  end
+
+  class GrammarFileParser
+    def self.parse: (String source, String filename) -> untyped
+  end
+
+  class States
+    def initialize: (untyped grammar) -> void
+    def nfa: () -> States
+    def dfa: () -> States
+    def state_transition_table: () -> untyped
+  end
+end

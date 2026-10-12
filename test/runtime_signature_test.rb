@@ -27,7 +27,7 @@ class RuntimeSignatureTest < Minitest::Test
     Dir[File.expand_path("../sig/**/*.rbs", __dir__)].each do |path|
       refute_match(/^module Racc\b/, File.read(path))
     end
-    assert_equal ["prism"], spec.runtime_dependencies.map(&:name)
+    assert_equal %w[prism racc rbs], spec.runtime_dependencies.map(&:name)
   end
 
   def test_gem_signatures_load_their_optional_rake_dependency

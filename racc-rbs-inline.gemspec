@@ -19,4 +19,6 @@ Gem::Specification.new do |spec|
   spec.executables = ["racc-rbs-inline"]
   spec.require_paths = ["lib"]
   spec.add_dependency "prism", ">= 1.0"
+  spec.add_dependency "racc", ">= 1.6.2", "< 2.0"
+  spec.add_dependency "rbs", ">= 4.1", "< 5.0"
 end

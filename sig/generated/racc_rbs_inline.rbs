@@ -4,8 +4,8 @@ module RaccRbsInline
   class Error < StandardError
   end
 
-  # : (String source) -> String
-  def self.annotate: (String source) -> String
+  # : (String source, ?grammar: String?, ?grammar_filename: String) -> String
+  def self.annotate: (String source, ?grammar: String?, ?grammar_filename: String) -> String
 
   # : (String source) -> bool
   def self.annotated?: (String source) -> bool

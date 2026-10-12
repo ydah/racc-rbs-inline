@@ -6,9 +6,9 @@ require_relative "racc_rbs_inline/version"
 module RaccRbsInline
   class Error < StandardError; end
 
-  #: (String source) -> String
-  def self.annotate(source)
-    Annotator.new.annotate(source)
+  #: (String source, ?grammar: String?, ?grammar_filename: String) -> String
+  def self.annotate(source, grammar: nil, grammar_filename: "grammar.y")
+    Annotator.new.annotate(source, grammar: grammar, grammar_filename: grammar_filename)
   end
 
   #: (String source) -> bool

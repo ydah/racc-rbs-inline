@@ -10,8 +10,8 @@ module RaccRbsInline
 
     CONSTANT_TYPES: Hash[Symbol, String]
 
-    # : (String source) -> String
-    def annotate: (String source) -> String
+    # : (String source, ?grammar: String?, ?grammar_filename: String) -> String
+    def annotate: (String source, ?grammar: String?, ?grammar_filename: String) -> String
 
     # : (String source) -> bool
     def annotated?: (String source) -> bool
@@ -21,8 +21,8 @@ module RaccRbsInline
     # : (String source) -> String
     def unwrap: (String source) -> String
 
-    # : (String source) -> String
-    def add_annotations: (String source) -> String
+    # : (String source, types: GrammarTypes?, existing: bool) -> String
+    def add_annotations: (String source, types: GrammarTypes?, existing: bool) -> String
 
     # : (Prism::LocalVariableWriteNode node) -> String?
     def table_type: (Prism::LocalVariableWriteNode node) -> String?
