@@ -151,6 +151,16 @@ class CLITest < Minitest::Test
     assert_equal "existing parser\n", File.binread(output)
   end
 
+  def test_default_verbose_log_outside_staging_cannot_overwrite_the_grammar
+    grammar = write("build.output", GRAMMAR)
+    directory = File.join(@dir, "build.debug")
+    FileUtils.mkdir_p(directory)
+    output = File.join(directory, "parser.rb")
+    assert_equal 1, run_cli("generate", grammar, "-o", output, "--", "--verbose")
+    assert_equal GRAMMAR, File.binread(grammar)
+    refute File.exist?(output)
+  end
+
   def test_generated_invalid_ruby_keeps_existing_output
     grammar = write("bad_action.y", GRAMMAR.sub("result = val[0]", "result = )"))
     output = write("parser.rb", "existing parser\n")

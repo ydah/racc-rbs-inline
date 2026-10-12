@@ -25,8 +25,8 @@ module RaccRbsInline
     # : (Array[String] args) -> Integer
     def generate: (Array[String] args) -> Integer
 
-    # : (Array[String] options, String grammar, String output) -> void
-    def validate_log_paths: (Array[String] options, String grammar, String output) -> void
+    # : (Array[String] options, String grammar, String output) -> bool
+    def validate_log_paths: (Array[String] options, String grammar, String output) -> bool
 
     # : (String path, String grammar, String output) -> void
     def validate_log_path: (String path, String grammar, String output) -> void

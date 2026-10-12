@@ -118,7 +118,7 @@ module RaccRbsInline
         raise Error, "grammar and output must be different files"
       end
       raise Error, "pass the output path with -o before --" if racc_options.any? { |option| option == "--" || option.match?(/\A(?:-o|--output-file(?:=|\z))/) }
-      validate_log_paths(racc_options, grammar, output)
+      default_log = validate_log_paths(racc_options, grammar, output)
 
       Dir.mktmpdir("racc-rbs-inline-", File.expand_path(File.dirname(output))) do |directory|
         generated = File.join(directory, File.basename(output))
@@ -128,6 +128,7 @@ module RaccRbsInline
         end
         # Racc derives verbose log names from the first dot in the output path.
         racc_output = generated.delete_prefix("#{Dir.pwd}/")
+        validate_log_path(racc_output.sub(/(?:\..*?)?\z/, ".output"), grammar, output) if default_log
         stdout, stderr, status = Open3.capture3(*racc_command, *racc_options, "-o", racc_output, grammar)
         @out.write(stdout)
         @err.write(stderr)
@@ -147,17 +148,23 @@ module RaccRbsInline
       0
     end
 
-    #: (Array[String] options, String grammar, String output) -> void
+    #: (Array[String] options, String grammar, String output) -> bool
     def validate_log_paths(options, grammar, output)
       remaining = options.dup
+      verbose = false
+      explicit_log = false
       parser = OptionParser.new do |flags|
-        flags.on("-O", "--log-file FILE") { |path| validate_log_path(path, grammar, output) }
+        flags.on("-O", "--log-file FILE") do |path|
+          validate_log_path(path, grammar, output)
+          explicit_log = true
+        end
+        flags.on("-v", "--verbose") { verbose = true }
         # Recognize argument boundaries and short clusters; Racc validates all other options.
         flags.on("-e", "--executable [PATH]") {}
         flags.on("-o", "--output-file FILE") {}
         flags.on("-D FLAGS") {}
         flags.on("--superclass CLASS") {}
-        %w[-t -g -v -E -F -l -a -C -S -P --help --version].each { |flag| flags.on(flag) {} }
+        %w[-t -g -E -F -l -a -C -S -P --help --version].each { |flag| flags.on(flag) {} }
       end
       until remaining.empty?
         begin
@@ -166,6 +173,7 @@ module RaccRbsInline
           next
         end
       end
+      verbose && !explicit_log
     end
 
     #: (String path, String grammar, String output) -> void
