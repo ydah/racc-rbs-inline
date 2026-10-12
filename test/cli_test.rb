@@ -103,6 +103,54 @@ class CLITest < Minitest::Test
     assert RaccRbsInline.annotated?(File.binread(output))
   end
 
+  def test_generate_preserves_existing_modes_and_honors_executable_option
+    grammar = write("parser.y", GRAMMAR)
+    output = write("parser.rb", "existing parser\n")
+    [0o600, 0o755].each do |mode|
+      File.chmod(mode, output)
+      assert_equal 0, run_cli("generate", grammar, "-o", output), @err.string
+      assert_equal mode, File.stat(output).mode & 0o777
+    end
+    File.chmod(0o600, output)
+    assert_equal 0, run_cli("generate", grammar, "-o", output, "--", "--executable=#{RbConfig.ruby}"), @err.string
+    assert_equal 0o755, File.stat(output).mode & 0o777
+  end
+
+  def test_log_paths_cannot_alias_the_grammar_or_output
+    grammar = write("parser.y", GRAMMAR)
+    output = write("parser.rb", "existing parser\n")
+    symlink = File.join(@dir, "grammar_link")
+    hardlink = File.join(@dir, "output_link")
+    File.symlink(grammar, symlink)
+    File.link(output, hardlink)
+    [grammar, output, symlink, hardlink].each do |path|
+      [["--log-file", path], ["--log-file=#{path}"], ["-O", path], ["-O#{path}"],
+       ["--log=#{path}"], ["-vO#{path}"]].each do |options|
+        assert_equal 1, run_cli("generate", grammar, "-o", output, "--", *options), options.inspect
+        assert_equal GRAMMAR, File.binread(grammar), options.inspect
+        assert_equal "existing parser\n", File.binread(output), options.inspect
+      end
+    end
+  end
+
+  def test_explicit_log_destinations_still_work
+    grammar = write("parser.y", GRAMMAR)
+    output = File.join(@dir, "parser.rb")
+    log = File.join(@dir, "parser.log")
+    [["--log-file", log], ["--log=#{log}"], ["-vO#{log}"]].each do |options|
+      assert_equal 0, run_cli("generate", grammar, "-o", output, "--", *options), @err.string
+      assert_includes File.read(log), "state"
+    end
+  end
+
+  def test_default_verbose_log_cannot_overwrite_the_grammar
+    grammar = write("parser.output", GRAMMAR)
+    output = write("parser.rb", "existing parser\n")
+    assert_equal 1, run_cli("generate", grammar, "-o", output, "--", "--verbose")
+    assert_equal GRAMMAR, File.binread(grammar)
+    assert_equal "existing parser\n", File.binread(output)
+  end
+
   def test_generated_invalid_ruby_keeps_existing_output
     grammar = write("bad_action.y", GRAMMAR.sub("result = val[0]", "result = )"))
     output = write("parser.rb", "existing parser\n")

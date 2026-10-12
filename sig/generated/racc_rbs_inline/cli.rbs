@@ -25,6 +25,15 @@ module RaccRbsInline
     # : (Array[String] args) -> Integer
     def generate: (Array[String] args) -> Integer
 
+    # : (Array[String] options, String grammar, String output) -> void
+    def validate_log_paths: (Array[String] options, String grammar, String output) -> void
+
+    # : (String path, String grammar, String output) -> void
+    def validate_log_path: (String path, String grammar, String output) -> void
+
+    # : (String first, String second) -> bool
+    def same_file?: (String first, String second) -> bool
+
     # : () -> Array[String]
     def racc_command: () -> Array[String]
 

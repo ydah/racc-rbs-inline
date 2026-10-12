@@ -114,13 +114,18 @@ module RaccRbsInline
       output = output_option || raise(Error, "generate requires -o OUT")
       raise Error, "generate requires one grammar" unless args.length == 1
       grammar = args.fetch(0)
-      if File.expand_path(grammar) == File.expand_path(output) || (File.exist?(output) && File.identical?(grammar, output))
+      if same_file?(grammar, output)
         raise Error, "grammar and output must be different files"
       end
       raise Error, "pass the output path with -o before --" if racc_options.any? { |option| option == "--" || option.match?(/\A(?:-o|--output-file(?:=|\z))/) }
+      validate_log_paths(racc_options, grammar, output)
 
       Dir.mktmpdir("racc-rbs-inline-", File.expand_path(File.dirname(output))) do |directory|
         generated = File.join(directory, File.basename(output))
+        if File.exist?(output)
+          File.write(generated, "")
+          File.chmod(File.stat(output).mode & 0o777, generated)
+        end
         # Racc derives verbose log names from the first dot in the output path.
         racc_output = generated.delete_prefix("#{Dir.pwd}/")
         stdout, stderr, status = Open3.capture3(*racc_command, *racc_options, "-o", racc_output, grammar)
@@ -129,15 +134,50 @@ module RaccRbsInline
         return status.exitstatus || 1 unless status.success?
 
         annotated = RaccRbsInline.annotate(File.binread(generated))
-        replace(output, annotated, File.stat(generated).mode)
         # Racc's --verbose option also produces a .output file beside the parser.
-        Dir.children(directory).each do |name|
-          artifact = File.join(directory, name)
-          next if artifact == generated
-          File.rename(artifact, File.join(File.dirname(output), name))
+        artifacts = Dir.children(directory).reject { |name| name == File.basename(generated) }
+        artifacts.each do |name|
+          validate_log_path(File.join(File.dirname(output), name), grammar, output)
+        end
+        replace(output, annotated, File.stat(generated).mode)
+        artifacts.each do |name|
+          File.rename(File.join(directory, name), File.join(File.dirname(output), name))
         end
       end
       0
+    end
+
+    #: (Array[String] options, String grammar, String output) -> void
+    def validate_log_paths(options, grammar, output)
+      remaining = options.dup
+      parser = OptionParser.new do |flags|
+        flags.on("-O", "--log-file FILE") { |path| validate_log_path(path, grammar, output) }
+        # Recognize argument boundaries and short clusters; Racc validates all other options.
+        flags.on("-e", "--executable [PATH]") {}
+        flags.on("-o", "--output-file FILE") {}
+        flags.on("-D FLAGS") {}
+        flags.on("--superclass CLASS") {}
+        %w[-t -g -v -E -F -l -a -C -S -P --help --version].each { |flag| flags.on(flag) {} }
+      end
+      until remaining.empty?
+        begin
+          parser.order!(remaining) {}
+        rescue OptionParser::InvalidOption
+          next
+        end
+      end
+    end
+
+    #: (String path, String grammar, String output) -> void
+    def validate_log_path(path, grammar, output)
+      if same_file?(path, grammar) || same_file?(path, output)
+        raise Error, "Racc log file must differ from grammar and output: #{path}"
+      end
+    end
+
+    #: (String first, String second) -> bool
+    def same_file?(first, second)
+      File.realdirpath(first) == File.realdirpath(second) || File.identical?(first, second)
     end
 
     #: () -> Array[String]
