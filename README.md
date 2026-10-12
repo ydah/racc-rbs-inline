@@ -1,39 +1,213 @@
-# Racc::Rbs::Inline
+# racc-rbs-inline
 
-TODO: Delete this and the text below, and describe your gem
-
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/racc/rbs/inline`. To experiment with that code, run `bin/console` for an interactive prompt.
+Add inline RBS annotations to a Racc-generated Ruby parser, without modifying Racc.
+The annotations work with **rbs-inline 0.14** and **Steep 2.0's native inline support**.
+Generated parsers keep their existing runtime dependencies.
 
 ## Installation
 
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
+Until the first RubyGems release, add this development dependency to your Gemfile:
 
-Install the gem and add to the application's Gemfile by executing:
-
-```bash
-bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+```ruby
+group :development do
+  gem "racc-rbs-inline", git: "https://github.com/ydah/racc-rbs-inline"
+  gem "racc", "1.8.1"
+  gem "rbs-inline", "0.14.0" # only needed for the extraction workflow
+  gem "steep", "2.0.0"
+end
 ```
 
-If bundler is not being used to manage dependencies, install the gem by executing:
-
-```bash
-gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
-```
+Run `bundle install`. The annotator requires Ruby 3.2+ and Prism 1.0+.
+Racc is needed to generate parsers, but not to annotate an existing generated file.
 
 ## Usage
 
-TODO: Write usage instructions here
+Add one command after your existing Racc invocation:
+
+```sh
+bundle exec racc -o lib/parser.rb parser.y
+bundle exec racc-rbs-inline annotate lib/parser.rb
+```
+
+Or generate and annotate together:
+
+```sh
+bundle exec racc-rbs-inline generate parser.y -o lib/parser.rb -- --embedded --frozen
+```
+
+`-o` is required. Arguments after `--` are passed to Racc, which runs as a separate
+process. Racc's exit status is preserved if generation fails. For executable
+output with Racc 1.8.1, specify a path such as `--executable=/usr/bin/ruby`;
+Racc itself rejects an omitted executable path on some Ruby versions.
+
+```sh
+# Annotate several files in place.
+bundle exec racc-rbs-inline annotate lib/parser.rb lib/other_parser.rb
+
+# Print the transformed source, leaving files alone.
+bundle exec racc-rbs-inline annotate --stdout lib/parser.rb
+
+# List files needing annotation; exit 1 if any need changes, otherwise 0.
+bundle exec racc-rbs-inline annotate --check lib/parser.rb
+
+# Copy runtime signatures (defaults to sig/racc/parser.rbs).
+bundle exec racc-rbs-inline sig --output sig/racc
+
+bundle exec racc-rbs-inline --help
+bundle exec racc-rbs-inline --version
+```
+
+Invalid Ruby, including invalid Ruby exposed when action wrappers are removed,
+is rejected before writing the annotated file. `annotate` validates every input
+before writing any of them. Repeating annotation leaves the file unchanged.
+
+The library API returns source text without performing file I/O:
+
+```ruby
+require "racc_rbs_inline"
+
+annotated_source = RaccRbsInline.annotate(source)
+RaccRbsInline.annotated?(annotated_source) # => true
+```
+
+`annotated?` detects the `# rbs_inline: enabled` comment. Files already carrying
+that marker are left untouched; it does not re-audit their annotations.
+
+## Rake integration
+
+```ruby
+require "racc_rbs_inline/rake_task"
+
+RaccRbsInline::RakeTask.new(:parser) do |task|
+  task.grammar = "parser.y"
+  task.output = "lib/parser.rb"
+  task.options = ["--embedded", "--frozen"]
+end
+```
+
+`bundle exec rake parser` regenerates and annotates the output when the grammar
+is newer or the output is absent. The output is also available as a file task.
+
+## Type checking
+
+First copy the `Racc::Parser` runtime signatures:
+
+```sh
+bundle exec racc-rbs-inline sig
+```
+
+These signatures live in `data/racc` inside the gem, so they are not automatically
+loaded with this gem's own signatures. Until Racc signatures are accepted into
+[gem_rbs_collection](https://github.com/ruby/gem_rbs_collection), use the `sig`
+command. Once collection support is available, use `rbs collection install`
+and remove your copied `sig/racc` directory to avoid duplicate declarations.
+
+### Native inline support (Steep 2.0)
+
+```ruby
+# Steepfile
+target :lib do
+  signature "sig/racc"
+  check "lib", inline: true
+end
+```
+
+```sh
+bundle exec steep check
+```
+
+### Extract signatures with rbs-inline
+
+```ruby
+# Steepfile
+target :lib do
+  signature "sig"
+  check "lib"
+end
+```
+
+```sh
+bundle exec rbs-inline --output=sig/generated lib
+bundle exec steep check
+```
+
+Choose one workflow; do not load extracted declarations while also enabling
+native inline checking for the same parser.
+
+A complete small grammar is in [test/fixtures/sum.y](test/fixtures/sum.y).
+Copy that grammar to `parser.y` in a project with the Gemfile above:
+
+```sh
+mkdir -p lib
+bundle exec racc-rbs-inline generate parser.y -o lib/parser.rb
+bundle exec racc-rbs-inline sig
+# Save either Steepfile above, then run that workflow's commands.
+```
+
+The integration tests exercise this grammar through both workflows, including
+strict diagnostics. To enable strict diagnostics in your own target, add
+`configure_code_diagnostics(Steep::Diagnostic::Ruby.strict)`.
+
+## What gets annotated
+
+The annotator locates classes whose bodies assign `Racc_arg`. It unwraps their
+heredoc `module_eval` calls, then annotates ten tables, three constants, and all
+`_reduce_N` / `_reduce_none` methods. Reduction arguments and results use
+`untyped`. Semantic value declarations (`@racc-type`) are a future phase.
+
+User-written actions, `header`, `inner`, and `footer` code remain your
+responsibility to type. Existing annotations in `inner` become visible after
+unwrapping. Separate instance variable annotations from method definitions
+with a blank line:
+
+```ruby
+---- inner
+  # @rbs @tokens: Array[Array[untyped]]
+
+  #: (Array[Array[untyped]]) -> void
+  def initialize(tokens)
+    @tokens = tokens
+  end
+```
+
+**Backtrace locations change:** unwrapping `module_eval` means exceptions point
+to the generated `.rb` file instead of the grammar's `.y` lines, as with Racc's
+`--no-line-convert` option. Code relying on `__FILE__`, `__LINE__`, or lexical
+scope inside those wrappers should account for the same change.
+
+The implementation preserves other source bytes, including embedded runtime
+code, header/footer wrappers, encoding declarations, and line endings.
 
 ## Development
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+```sh
+bundle install
+bundle exec rbs collection install
+ruby script/fetch-racc
+bundle exec rake
+```
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+`rake test` runs unit tests, 13 golden/behavior variants, both type-checking
+workflows, a deliberately corrupt table test, and the upstream Racc corpus.
+The corpus is fetched from the pinned `v1.8.1` tag into ignored `tmp/racc` and is
+not redistributed. Set `RACC_CORPUS` to use another local copy. Without the
+corpus, that regression test reports a skip; CI always fetches it.
 
-## Contributing
+The 58 upstream grammars include three intentional generator errors and two
+with invalid Ruby actions. All other 53 are checked separately to avoid class
+name collisions. User-code signature failures are documented in
+[test/regression_test.rb](test/regression_test.rb); generated table diagnostics
+must be absent. The embedded runtime is checked byte-for-byte while golden
+files normalize its representation, version banners, random delimiter IDs,
+and executable paths.
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/racc-rbs-inline.
+`rake typecheck` regenerates this gem's own signatures and checks them with
+Steep. CI covers Ruby 3.2, 3.3, 3.4, and 4.0, with Racc 1.8.1 as the baseline
+and additional Racc 1.6.2 / 1.7.3 compatibility jobs.
+Racc 1.6.2 does not support `--frozen`; that variant is skipped there.
+Racc 1.6.2 and 1.7.3 cannot generate the four upstream grammars using Racc 1.8's
+group/optional/repetition syntax, so their corpus checks cover the remaining 49.
 
 ## License
 
-The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
+[MIT](LICENSE.txt).

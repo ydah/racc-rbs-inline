@@ -1,0 +1,17 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "fileutils"
+require "tmpdir"
+
+root = File.expand_path("..", __dir__)
+destination = File.join(root, "tmp/racc")
+abort "#{destination} already exists; remove it explicitly to download again" if File.exist?(destination)
+FileUtils.mkdir_p(File.dirname(destination))
+Dir.mktmpdir("racc-download") do |dir|
+  archive = File.join(dir, "racc.tar.gz")
+  abort "Download failed" unless system("curl", "--fail", "--location", "https://codeload.github.com/ruby/racc/tar.gz/refs/tags/v1.8.1", "--output", archive)
+  abort "Extraction failed" unless system("tar", "-xzf", archive, "-C", dir)
+  FileUtils.mv(File.join(dir, "racc-1.8.1"), destination)
+end
+puts "Downloaded Racc v1.8.1 to #{destination}"
