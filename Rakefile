@@ -15,7 +15,7 @@ end
 
 desc "Check this gem's types"
 task typecheck: :rbs do
-  sh "bundle", "exec", "rbs", "-I", "data/racc", "validate"
+  sh "bundle", "exec", "rbs", "--no-collection", "-I", "data/racc", "validate"
   sh "bundle", "exec", "steep", "check", "-j", "2"
 end
 
