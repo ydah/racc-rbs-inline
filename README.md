@@ -6,11 +6,11 @@ Generated parsers keep their existing runtime dependencies.
 
 ## Installation
 
-Until the first RubyGems release, add this development dependency to your Gemfile:
+Add this development dependency to your Gemfile:
 
 ```ruby
 group :development do
-  gem "racc-rbs-inline", git: "https://github.com/ydah/racc-rbs-inline"
+  gem "racc-rbs-inline", "~> 0.1.0"
   gem "racc", "1.8.1"
   gem "rbs-inline", "0.14.0" # only needed for the extraction workflow
   gem "steep", "2.0.0"
@@ -53,7 +53,8 @@ bundle exec racc-rbs-inline annotate lib/parser.rb --grammar parser.y
 # List files needing annotation; exit 1 if any need changes, otherwise 0.
 bundle exec racc-rbs-inline annotate --check lib/parser.rb
 
-# Copy runtime signatures (defaults to sig/racc/parser.rbs).
+# Copy runtime signatures when not using rbs collection.
+# Defaults to sig/racc/parser.rbs.
 bundle exec racc-rbs-inline sig --output sig/racc
 
 bundle exec racc-rbs-inline --help
@@ -135,25 +136,56 @@ is newer or the output is absent. The output is also available as a file task.
 
 ## Type checking
 
-First copy the `Racc::Parser` runtime signatures:
+For Racc 1.8, the `Racc::Parser` runtime signatures are available from
+[gem_rbs_collection](https://github.com/ruby/gem_rbs_collection/tree/main/gems/racc/1.8).
+Initialize collection configuration once:
+
+```sh
+bundle exec rbs collection init
+```
+
+For v0.1.0, exclude build and type-checker signatures when checking your
+application's generated parser. Add these entries to `gems:` in
+`rbs_collection.yaml`:
+
+```yaml
+gems:
+  - name: racc-rbs-inline
+    ignore: true
+  - name: rbs
+    ignore: true
+  - name: rbs-inline
+    ignore: true
+  - name: steep
+    ignore: true
+```
+
+Then install the signatures:
+
+```sh
+bundle exec rbs collection install
+```
+
+If your collection lock predates Racc's registration, run
+`bundle exec rbs collection update`. Remove any copied `sig/racc` directory
+when switching to collection signatures to avoid duplicate declarations.
+
+For Racc 1.6 / 1.7, or projects without collection, copy the bundled runtime
+signatures instead:
 
 ```sh
 bundle exec racc-rbs-inline sig
 ```
 
-These signatures live in `data/racc` inside the gem, so they are not automatically
-loaded with this gem's own signatures. Racc signatures have been submitted in
-[gem_rbs_collection PR #1085](https://github.com/ruby/gem_rbs_collection/pull/1085).
-Until they are accepted, use the `sig` command. Once collection support is
-available, use `rbs collection install`
-and remove your copied `sig/racc` directory to avoid duplicate declarations.
+These signatures live in `data/racc` inside the gem and are loaded only when
+copied into your signature directory. The `sig` command remains supported.
 
 ### Native inline support (Steep 2.0)
 
 ```ruby
 # Steepfile
 target :lib do
-  signature "sig/racc"
+  signature "sig"
   check "lib", inline: true
 end
 ```
@@ -181,12 +213,13 @@ Choose one workflow; do not load extracted declarations while also enabling
 native inline checking for the same parser.
 
 A complete small grammar is in [test/fixtures/sum.y](test/fixtures/sum.y).
-Copy that grammar to `parser.y` in a project with the Gemfile above:
+After setting up collection configuration above, copy that grammar to
+`parser.y` in a project with the Gemfile above:
 
 ```sh
 mkdir -p lib
 bundle exec racc-rbs-inline generate parser.y -o lib/parser.rb
-bundle exec racc-rbs-inline sig
+bundle exec rbs collection install
 # Save either Steepfile above, then run that workflow's commands.
 ```
 
