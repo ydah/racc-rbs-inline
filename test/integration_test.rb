@@ -16,9 +16,11 @@ class IntegrationTest < Minitest::Test
         assert_equal expected, normalize_golden(annotated)
         assert_equal annotated, RaccRbsInline.annotate(annotated)
         if %w[embedded executable].include?(variant)
-          runtime = /###### racc\/parser\.rb begin\n.*?###### racc\/parser\.rb end/m
-          refute_nil original[runtime]
-          assert_equal original[runtime], annotated[runtime]
+          runtime_begin = "###### racc/parser.rb begin\n"
+          runtime_end = "###### racc/parser.rb end"
+          runtime_body, closing_marker = original.partition(runtime_begin).last.partition(runtime_end)
+          refute_empty closing_marker
+          assert_includes annotated, "#{runtime_begin}#{runtime_body}#{closing_marker}"
         end
         klass = variant == "nested" ? "A::B::SumParser" : "SumParser"
         token = variant == "convert" ? "Integer" : ":NUMBER"
