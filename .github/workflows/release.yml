@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        with:
+          ruby-version: '3.4'
+      - name: Install dependencies
+        run: bundle install
+      - name: Verify tag and version
+        run: |
+          release_version=$(bundle exec ruby -Ilib -rracc_rbs_inline/version -e 'print RaccRbsInline::VERSION')
+          test "$GITHUB_REF_NAME" = "v$release_version"
+      - name: Install development signatures
+        run: bundle exec rbs collection install
+      - name: Fetch pinned regression corpus
+        run: ruby script/fetch-racc
+      - name: Test and build
+        run: |
+          bundle exec rake
+          git diff --exit-code
+          gem build --strict racc-rbs-inline.gemspec
+      - name: Publish through RubyGems Trusted Publishing
+        uses: rubygems/release-gem@7f9650160c1a4e7989fdc9855807bdbd421d8b6b # v1.4.1
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_version=$(bundle exec ruby -Ilib -rracc_rbs_inline/version -e 'print RaccRbsInline::VERSION')
+          gh release create "$GITHUB_REF_NAME" "pkg/racc-rbs-inline-${release_version}.gem" \
+            --verify-tag --title "$GITHUB_REF_NAME" --generate-notes

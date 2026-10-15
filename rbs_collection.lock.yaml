@@ -9,6 +9,14 @@ gems:
   version: 1.9.0
   source:
     type: rubygems
+- name: racc
+  version: '1.8'
+  source:
+    type: git
+    name: ruby/gem_rbs_collection
+    revision: e85b6c1b5f14bd37f7642a0b085e959d4ae7b148
+    remote: https://github.com/ruby/gem_rbs_collection.git
+    repo_dir: gems
 - name: rake
   version: '13.0'
   source:
