@@ -1,8 +1,39 @@
-# racc-rbs-inline
+<h1 align="center">racc-rbs-inline</h1>
 
-Add inline RBS annotations to a Racc-generated Ruby parser, without modifying Racc.
-The annotations work with **rbs-inline 0.14** and **Steep 2.0's native inline support**.
-Generated parsers keep their existing runtime dependencies.
+<p align="center">
+  <strong>Inline RBS annotations and semantic value types for Racc-generated Ruby parsers.</strong>
+</p>
+
+<p align="center">
+  <a href="https://rubygems.org/gems/racc-rbs-inline"><img src="https://img.shields.io/gem/v/racc-rbs-inline?color=319e8c" alt="Gem version"></a>
+  <a href="https://rubygems.org/gems/racc-rbs-inline"><img src="https://img.shields.io/gem/required-ruby-version/racc-rbs-inline" alt="Required Ruby version"></a>
+  <a href="https://github.com/ydah/racc-rbs-inline/actions/workflows/main.yml"><img src="https://github.com/ydah/racc-rbs-inline/actions/workflows/main.yml/badge.svg" alt="Ruby and Racc tests"></a>
+  <a href="https://github.com/ydah/racc-rbs-inline/actions/workflows/lrama.yml"><img src="https://github.com/ydah/racc-rbs-inline/actions/workflows/lrama.yml/badge.svg" alt="Lrama acceptance"></a>
+  <a href="LICENSE.txt"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
+</p>
+
+<p align="center">
+  <a href="#features">Features</a> ·
+  <a href="#installation">Installation</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#usage">Usage</a> ·
+  <a href="#type-checking">Type checking</a> ·
+  <a href="#development">Development</a>
+</p>
+
+---
+
+Add one command after Racc to make generated parser tables and reduction methods
+available to **rbs-inline 0.14** and **Steep 2.0's native inline support**.
+Annotations are comments, so generated parsers keep their existing runtime dependencies.
+
+## Features
+
+- Annotate generated tables, constants, and reduction methods without modifying Racc.
+- Declare semantic value types in grammar comments to check action arguments and results.
+- Generate and annotate in one command, or use a Rake file task.
+- Refresh annotations safely, with idempotence and grammar/table mismatch checks.
+- Use either native inline checking or extracted RBS signatures.
 
 ## Installation
 
@@ -17,10 +48,19 @@ group :development do
 end
 ```
 
-Run `bundle install`. The annotator requires Ruby 3.2+, Prism 1.0+, Racc 1.6.2+
-(below 2.0), and RBS 4.1+ (below 5.0).
+Then run `bundle install`.
 
-## Usage
+### Requirements
+
+| Dependency | Supported versions |
+| --- | --- |
+| Ruby | 3.2+ |
+| Prism | 1.0+ |
+| Racc | 1.6.2 to below 2.0 |
+| RBS | 4.1 to below 5.0 |
+| Type checker | Steep 2.0; rbs-inline 0.14 for signature extraction |
+
+## Quick start
 
 Add one command after your existing Racc invocation:
 
@@ -34,6 +74,13 @@ Or generate and annotate together:
 ```sh
 bundle exec racc-rbs-inline generate parser.y -o lib/parser.rb -- --embedded --frozen
 ```
+
+Continue with [type checking](#type-checking) to install the runtime signatures
+and choose a Steep workflow. Example grammars are available in
+[test/fixtures/sum.y](test/fixtures/sum.y) and
+[test/fixtures/typed_calc.y](test/fixtures/typed_calc.y).
+
+## Usage
 
 `-o` is required. Arguments after `--` are passed to Racc, which runs as a separate
 process. Racc's exit status is preserved if generation fails. For executable
@@ -64,6 +111,8 @@ bundle exec racc-rbs-inline --version
 Invalid Ruby, including invalid Ruby exposed when action wrappers are removed,
 is rejected before writing the annotated file. `annotate` validates every input
 before writing any of them. Repeating annotation leaves the file unchanged.
+
+### Ruby API
 
 The library API returns source text without performing file I/O:
 
@@ -227,7 +276,7 @@ The integration tests exercise this grammar through both workflows, including
 strict diagnostics. To enable strict diagnostics in your own target, add
 `configure_code_diagnostics(Steep::Diagnostic::Ruby.strict)`.
 
-## What gets annotated
+## How it works
 
 The annotator locates classes whose bodies assign `Racc_arg`. It unwraps their
 heredoc `module_eval` calls, then annotates ten tables, three constants, and all
@@ -269,6 +318,10 @@ bundle exec rake
 `rake test` runs unit tests, 13 golden/behavior variants, both type-checking
 workflows, semantic value checks, deliberately corrupt table tests, and the
 upstream Racc corpus.
+
+<details>
+<summary>Regression coverage and compatibility</summary>
+
 The corpus is fetched from the pinned `v1.8.1` tag into ignored `tmp/racc` and is
 not redistributed. Set `RACC_CORPUS` to use another local copy. Without the
 corpus, that regression test reports a skip; CI always fetches it.
@@ -297,6 +350,28 @@ after the check and requires a clean checkout at the pinned revision.
 Application type errors remain in the report; two unrelated profiler signatures
 using unsupported `void` unions are excluded from the temporary checking project.
 
+</details>
+
+Repository checks also cover GitHub Actions syntax, YAML, spelling, and workflow
+security. Dependabot checks Bundler dependencies and GitHub Actions weekly.
+
+### Releasing
+
+Update `RaccRbsInline::VERSION`, run `bundle exec rake`, and commit the version
+and any updated `rbs_collection.lock.yaml` before pushing a matching `vX.Y.Z` tag.
+The [release workflow](.github/workflows/release.yml) runs the checks, publishes
+through RubyGems Trusted Publishing, and creates a GitHub Release with the Gem
+attached and generated release notes.
+
+The RubyGems Trusted Publisher must point to `ydah/racc-rbs-inline`, workflow
+`release.yml`, with no environment name.
+
+## Contributing
+
+[Bug reports](https://github.com/ydah/racc-rbs-inline/issues) and pull requests
+are welcome. Include a minimal grammar, generation flags, and the Ruby, Racc,
+RBS, and Steep versions when reporting a problem.
+
 ## License
 
-[MIT](LICENSE.txt).
+Released under the [MIT License](LICENSE.txt).
