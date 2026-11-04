@@ -105,7 +105,8 @@ module RaccRbsInline
       return "Array[Integer | Symbol]" if name == "racc_reduce_table"
       return unless name == "racc_token_table"
 
-      literal = node.value.is_a?(Prism::HashNode) && node.value.elements.all? do |element|
+      value = node.value
+      literal = value.is_a?(Prism::HashNode) && value.elements.all? do |element|
         element.is_a?(Prism::AssocNode) &&
           [Prism::SymbolNode, Prism::StringNode, Prism::FalseNode].any? { |type| element.key.is_a?(type) }
       end
@@ -149,9 +150,10 @@ module RaccRbsInline
       bodies = [] #: Array[Prism::StatementsNode]
       pending = [program] #: Array[Prism::Node]
       while (node = pending.pop)
-        if node.is_a?(Prism::ClassNode) && node.body.is_a?(Prism::StatementsNode) &&
-            node.body.body.any? { |statement| statement.is_a?(Prism::ConstantWriteNode) && statement.name == :Racc_arg }
-          bodies << node.body
+        body = node.is_a?(Prism::ClassNode) ? node.body : nil
+        if body.is_a?(Prism::StatementsNode) &&
+            body.body.any? { |statement| statement.is_a?(Prism::ConstantWriteNode) && statement.name == :Racc_arg }
+          bodies << body
         end
         pending.concat(node.compact_child_nodes)
       end
